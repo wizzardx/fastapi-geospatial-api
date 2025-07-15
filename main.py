@@ -97,7 +97,7 @@ async def value_error_handler(request: Request, exc: ValueError):
     logger.error(f"Value error in {request.url}: {exc}")
     return JSONResponse(
         status_code=422,
-        content={"detail": "Invalid data provided", "error": str(exc)}
+        content={"detail": str(exc), "error": str(exc)}
     )
 
 # Background task functions
