@@ -1,0 +1,104 @@
+# File: docker-compose.yml
+# Day 6: Complete development environment
+
+version: '3.8'
+
+services:
+  # Main FastAPI application
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "8000:8000"
+    environment:
+      - ENVIRONMENT=development
+      - LOG_LEVEL=INFO
+      - REDIS_URL=redis://redis:6379/0
+    volumes:
+      - ./:/app
+      - ./logs:/app/logs
+    depends_on:
+      - redis
+      - localstack
+    networks:
+      - geospatial-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Redis for Celery background tasks
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    networks:
+      - geospatial-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # LocalStack for AWS services simulation
+  localstack:
+    image: localstack/localstack:latest
+    ports:
+      - "4566:4566"
+    environment:
+      - SERVICES=sqs,s3,dynamodb
+      - DEBUG=1
+      - DOCKER_HOST=unix:///var/run/docker.sock
+    volumes:
+      - "/var/run/docker.sock:/var/run/docker.sock"
+      - localstack_data:/tmp/localstack
+    networks:
+      - geospatial-network
+    restart: unless-stopped
+
+  # Celery worker for background processing
+  worker:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    command: celery -A async-processing.celery_worker worker --loglevel=info
+    environment:
+      - ENVIRONMENT=development
+      - REDIS_URL=redis://redis:6379/0
+      - AWS_ENDPOINT_URL=http://localstack:4566
+    volumes:
+      - ./:/app
+      - ./logs:/app/logs
+    depends_on:
+      - redis
+      - localstack
+    networks:
+      - geospatial-network
+    restart: unless-stopped
+
+  # Nginx reverse proxy (production-like setup)
+  nginx:
+    image: nginx:alpine
+    ports:
+      - "80:80"
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf:ro
+    depends_on:
+      - api
+    networks:
+      - geospatial-network
+    restart: unless-stopped
+
+volumes:
+  redis_data:
+  localstack_data:
+
+networks:
+  geospatial-network:
+    driver: bridge
