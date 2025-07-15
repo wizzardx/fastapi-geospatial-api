@@ -1,5 +1,5 @@
 # File: docker-compose.yml
-# Day 6: Complete development environment
+# Day 6: Simplified development environment (without Celery worker)
 
 version: '3.8'
 
@@ -30,7 +30,7 @@ services:
       timeout: 10s
       retries: 3
 
-  # Redis for Celery background tasks
+  # Redis for future background tasks
   redis:
     image: redis:7-alpine
     ports:
@@ -58,26 +58,6 @@ services:
     volumes:
       - "/var/run/docker.sock:/var/run/docker.sock"
       - localstack_data:/tmp/localstack
-    networks:
-      - geospatial-network
-    restart: unless-stopped
-
-  # Celery worker for background processing
-  worker:
-    build:
-      context: .
-      dockerfile: Dockerfile
-    command: celery -A async-processing.celery_worker worker --loglevel=info
-    environment:
-      - ENVIRONMENT=development
-      - REDIS_URL=redis://redis:6379/0
-      - AWS_ENDPOINT_URL=http://localstack:4566
-    volumes:
-      - ./:/app
-      - ./logs:/app/logs
-    depends_on:
-      - redis
-      - localstack
     networks:
       - geospatial-network
     restart: unless-stopped

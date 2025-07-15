@@ -1,0 +1,41 @@
+# File: .github/workflows/test-ci.yml
+# Day 6: Test the CI/CD pipeline
+
+name: Test CI/CD Pipeline
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - '.github/workflows/**'
+
+jobs:
+  test-ci-pipeline:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Validate workflow syntax
+      run: |
+        echo "Validating GitHub Actions workflows..."
+        for workflow in .github/workflows/*.yml; do
+          echo "Checking $workflow"
+          # Basic YAML validation
+          python -c "import yaml; yaml.safe_load(open('$workflow'))"
+        done
+
+    - name: Test Docker build
+      run: |
+        docker build -t test-image .
+        docker run --rm test-image python -c "import main; print('✅ App imports successfully')"
+
+    - name: Test Docker Compose
+      run: |
+        docker-compose -f docker-compose.yml config
+        echo "✅ Docker Compose configuration is valid"
+
+    - name: Simulate deployment
+      run: |
+        echo "✅ All pipeline components validated"

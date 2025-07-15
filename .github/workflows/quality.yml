@@ -1,0 +1,84 @@
+# File: .github/workflows/quality.yml
+# Day 6: Code quality and security checks
+
+name: Quality & Security
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main ]
+  schedule:
+    - cron: '0 6 * * 1'  # Weekly security scan
+
+jobs:
+  code-quality:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: "3.11"
+
+    - name: Install quality tools
+      run: |
+        pip install black isort flake8 mypy bandit safety
+
+    - name: Code formatting check
+      run: |
+        black --check --diff .
+
+    - name: Import sorting check
+      run: |
+        isort --check-only --diff .
+
+    - name: Linting
+      run: |
+        flake8 . --count --statistics
+
+    - name: Type checking
+      run: |
+        mypy main.py --ignore-missing-imports
+
+    - name: Security linting
+      run: |
+        bandit -r . -f json -o bandit-report.json || true
+
+    - name: Dependency vulnerability check
+      run: |
+        safety check --json --output safety-report.json || true
+
+    - name: Upload security reports
+      uses: actions/upload-artifact@v3
+      with:
+        name: security-reports
+        path: |
+          bandit-report.json
+          safety-report.json
+
+  docker-security:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Build Docker image
+      run: |
+        docker build -t geospatial-api:security-scan .
+
+    - name: Scan Docker image with Trivy
+      uses: aquasecurity/trivy-action@master
+      with:
+        image-ref: 'geospatial-api:security-scan'
+        format: 'sarif'
+        output: 'trivy-results.sarif'
+
+    - name: Upload Trivy scan results
+      uses: github/codeql-action/upload-sarif@v2
+      with:
+        sarif_file: 'trivy-results.sarif'

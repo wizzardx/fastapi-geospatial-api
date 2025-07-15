@@ -1,0 +1,46 @@
+# File: .github/workflows/staging.yml
+# Day 6: Staging environment deployment
+
+name: Deploy to Staging
+
+on:
+  push:
+    branches: [ develop ]
+
+env:
+  AWS_REGION: us-east-1
+  ECR_REPOSITORY: geospatial-api-staging
+  ECS_SERVICE: geospatial-api-staging-service
+  ECS_CLUSTER: geospatial-staging-cluster
+
+jobs:
+  deploy-staging:
+    runs-on: ubuntu-latest
+    environment: staging
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Configure AWS credentials
+      uses: aws-actions/configure-aws-credentials@v4
+      with:
+        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+        aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        aws-region: ${{ env.AWS_REGION }}
+
+    - name: Deploy to staging
+      run: |
+        echo "Deploying to staging environment..."
+        # Same deployment steps as production but with staging resources
+
+    - name: Run integration tests
+      run: |
+        echo "Running integration tests against staging..."
+        # Add your integration test commands here
+
+    - name: Staging smoke tests
+      run: |
+        # Test critical endpoints
+        curl -f https://staging-api.yourdomain.com/health
+        curl -f https://staging-api.yourdomain.com/locations/cape-town
