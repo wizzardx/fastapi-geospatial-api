@@ -10,6 +10,11 @@ from enum import Enum
 import asyncio
 import logging
 import time
+from ai_simple import analyzer
+from database import database, sensor_db
+from auth import verify_api_key
+from monitoring import monitor
+
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -269,12 +274,115 @@ async def admin_get_sensors(
 @app.on_event("startup")
 async def startup():
     logger.info("FastAPI Geospatial API starting up...")
-    logger.info("Database connection would be established here")
+    await database.connect()
+    await sensor_db.create_sensor_table()
+    logger.info("Database connected")
 
 @app.on_event("shutdown")
 async def shutdown():
     logger.info("FastAPI Geospatial API shutting down...")
-    logger.info("Database connection would be closed here")
+    await database.disconnect()
+    logger.info("Database disconnected")
+
+# Add this new model
+class AIAnalysisRequest(BaseModel):
+    sensor_data: dict
+    location: str = "Cape Town"
+
+# Add this ONE new endpoint to your existing app
+@app.post("/ai/analyze")
+async def ai_analyze_sensor(request: AIAnalysisRequest):
+    """AI analysis of sensor data"""
+
+    try:
+        # Get AI analysis
+        analysis = analyzer.analyze_sensor_data(request.sensor_data)
+
+        return {
+            "location": request.location,
+            "sensor_data": request.sensor_data,
+            "ai_analysis": analysis,
+            "timestamp": datetime.now().isoformat(),
+            "status": "success"
+        }
+
+    except Exception as e:
+        return {
+            "location": request.location,
+            "sensor_data": request.sensor_data,
+            "ai_analysis": "AI analysis failed",
+            "error": str(e),
+            "timestamp": datetime.now().isoformat(),
+            "status": "error"
+        }
+
+@app.post("/sensors/db")
+async def create_sensor_in_database(sensor_data: SensorCreateRequest):
+    """Create sensor reading in PostgreSQL"""
+    try:
+        sensor_id = await sensor_db.insert_sensor(
+            sensor_data.sensor_type.value,
+            sensor_data.value,
+            sensor_data.location_name
+        )
+        return {
+            "id": sensor_id,
+            "status": "stored_in_database",
+            "timestamp": datetime.now().isoformat()
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
+
+@app.get("/sensors/db")
+async def get_sensors_from_database():
+    """Get sensors from PostgreSQL"""
+    try:
+        sensors = await sensor_db.get_sensors(limit=10)
+        return {
+            "sensors": sensors,
+            "source": "postgresql_database",
+            "timestamp": datetime.now().isoformat()
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
+
+@app.get("/secure/sensors")
+async def get_secure_sensors(auth_info = Depends(verify_api_key)):
+    """Secured endpoint requiring API key"""
+    return {
+        "sensors": sensor_data_store,
+        "authenticated_as": auth_info["environment"],
+        "timestamp": datetime.now().isoformat()
+    }
+
+@app.middleware("http")
+async def monitoring_middleware(request, call_next):
+    """Track requests and errors"""
+    monitor.record_request()
+    try:
+        response = await call_next(request)
+        if response.status_code >= 400:
+            monitor.record_error()
+        return response
+    except Exception as e:
+        monitor.record_error()
+        raise
+
+@app.get("/monitoring/health")
+async def detailed_health_check():
+    """Detailed health check with metrics"""
+    return monitor.get_health_status()
+
+@app.get("/monitoring/metrics")
+async def get_basic_metrics():
+    """Basic application metrics"""
+    return {
+        "application_metrics": monitor.get_health_status(),
+        "database_status": "connected" if database.is_connected else "disconnected",
+        "ai_service_status": "available",
+        "timestamp": datetime.now().isoformat()
+    }
+
 
 if __name__ == "__main__":
     import uvicorn

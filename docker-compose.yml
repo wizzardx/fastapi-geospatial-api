@@ -15,12 +15,14 @@ services:
       - ENVIRONMENT=development
       - LOG_LEVEL=INFO
       - REDIS_URL=redis://redis:6379/0
+      - DATABASE_URL=postgresql://postgres:password@postgres:5432/geospatial
     volumes:
       - ./:/app
       - ./logs:/app/logs
     depends_on:
       - redis
       - localstack
+      - postgres
     networks:
       - geospatial-network
     restart: unless-stopped
@@ -75,9 +77,23 @@ services:
       - geospatial-network
     restart: unless-stopped
 
+  postgres:
+    image: postgres:15-alpine
+    environment:
+      POSTGRES_DB: geospatial
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: password
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - geospatial-network
+
 volumes:
   redis_data:
   localstack_data:
+  postgres_data:
 
 networks:
   geospatial-network:
